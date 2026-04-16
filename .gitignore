@@ -1,0 +1,9 @@
+.env
+cookies.json
+output/
+__pycache__/
+*.pyc
+.venv/
+*.har
+/accounts/*.json
+/input

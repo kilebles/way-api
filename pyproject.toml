@@ -1,0 +1,14 @@
+[project]
+name = "reverse-runway"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx[http2]>=0.28.1",
+    "pydantic>=2.13.0",
+    "pydantic-settings>=2.13.1",
+    "loguru>=0.7.3",
+    "tenacity>=9.1.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

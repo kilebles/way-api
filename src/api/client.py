@@ -30,15 +30,13 @@ def make_client(account: Account) -> httpx.AsyncClient:
         "x-runway-workspace": str(account.workspace_id),
     }
 
-    proxies = {"all://": account.proxy} if account.proxy else None
-
     client = httpx.AsyncClient(
         base_url=BASE_URL,
         headers=headers,
-        proxy=account.proxy,
+        proxy=account.proxy_url,
         http2=True,
         timeout=httpx.Timeout(30.0),
         follow_redirects=True,
     )
-    logger.debug("Client created → {} (proxy={})", account.name, account.proxy or "none")
+    logger.debug("Client created → {} (proxy={})", account.name, account.proxy_url or "none")
     return client

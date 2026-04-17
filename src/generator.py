@@ -7,12 +7,12 @@ from loguru import logger
 
 from src.accounts import Account
 from src.api.client import make_client
-from src.api.endpoints import create_asset_group, create_session, get_task, submit_task
+from src.api.endpoints import get_task, submit_task
 from src.models import Task, TaskOptions, TaskStatus
 from src.settings import settings
 
 
-async def _poll_until_done(client: httpx.AsyncClient, workspace_id: int, task_id: str) -> Task:
+async def _poll_until_done(client: httpx.AsyncClient, workspace_id: int, task_id: str, account_name: str) -> Task:
     deadline = time.monotonic() + settings.poll_timeout
     attempt = 0
 
@@ -22,25 +22,26 @@ async def _poll_until_done(client: httpx.AsyncClient, workspace_id: int, task_id
         progress = float(task.progress_ratio or 0) * 100
 
         logger.info(
-            "Poll #{} | status={} | progress={:.1f}% | text={}",
+            "[{}] Poll #{} | status={} | progress={:.1f}%",
+            account_name,
             attempt,
             task.status,
             progress,
-            task.progress_text or "-",
         )
 
         if task.status == TaskStatus.SUCCEEDED:
-            logger.success("Task completed in {} polls", attempt)
+            logger.success("[{}] Task completed in {} polls", account_name, attempt)
             return task
 
         if task.status == TaskStatus.FAILED:
+            logger.error("[{}] Task FAILED | error={}", account_name, task.error)
             raise RuntimeError(f"Task failed: {task.error}")
 
         if time.monotonic() > deadline:
             raise TimeoutError(f"Task {task_id} did not finish in {settings.poll_timeout}s")
 
         if task.status == TaskStatus.THROTTLED:
-            logger.warning("Throttled — next check in {}s", settings.poll_interval_throttled)
+            logger.warning("[{}] Throttled — next check in {}s", account_name, settings.poll_interval_throttled)
             await asyncio.sleep(settings.poll_interval_throttled)
         else:
             await asyncio.sleep(settings.poll_interval)
@@ -65,49 +66,42 @@ async def _download_artifact(client: httpx.AsyncClient, url: str, dest: Path) ->
 async def generate_video(
     account: Account,
     prompt: str,
+    dest: Path,
     name: str = "generation",
     task_type: str = "seedance_2",
-    duration: int = 5,
     aspect_ratio: str = "16:9",
     resolution: str = "720p",
     generate_audio: bool = True,
     explore_mode: bool = False,
-) -> list[Path]:
+) -> bool:
     async with make_client(account) as client:
         logger.info("[{}] Starting: '{}'", account.name, prompt)
-
-        session_id = await create_session(client, account.workspace_id)
-        asset_group_id = await create_asset_group(client, account.workspace_id, session_id)
 
         options = TaskOptions(
             name=name,
             text_prompt=prompt,
-            duration=duration,
+            duration=settings.video_duration,
             aspect_ratio=aspect_ratio,
             resolution=resolution,
             generate_audio=generate_audio,
             explore_mode=explore_mode,
-            asset_group_id=asset_group_id,
+            asset_group_id="",  # filled inside submit_task
         )
 
         task = await submit_task(
             client=client,
             workspace_id=account.workspace_id,
-            session_id=session_id,
             task_type=task_type,
             options=options.to_api(),
+            account_name=account.name,
         )
 
-        task = await _poll_until_done(client, account.workspace_id, task.id)
+        task = await _poll_until_done(client, account.workspace_id, task.id, account.name)
 
-        output_dir = settings.output_dir / task.id
-        saved: list[Path] = []
+        if not task.artifacts:
+            return False
 
-        for i, artifact in enumerate(task.artifacts):
-            ext = artifact.url.split("?")[0].rsplit(".", 1)[-1] or "mp4"
-            dest = output_dir / f"{i}.{ext}"
-            await _download_artifact(client, artifact.url, dest)
-            saved.append(dest)
-
-        logger.info("[{}] Done. {} file(s) → {}", account.name, len(saved), output_dir)
-        return saved
+        artifact = task.artifacts[0]
+        await _download_artifact(client, artifact.url, dest)
+        logger.info("[{}] Done → {}", account.name, dest)
+        return True

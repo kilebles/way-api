@@ -38,6 +38,16 @@ class TaskOptions(BaseModel):
         }
 
 
+def _parse_error(error: object) -> str | None:
+    if error is None:
+        return None
+    if isinstance(error, str):
+        return error or None
+    if isinstance(error, dict):
+        return error.get("errorMessage") or str(error)
+    return str(error)
+
+
 class Artifact(BaseModel):
     url: str
 
@@ -63,6 +73,6 @@ class Task(BaseModel):
             status=TaskStatus(t["status"]),
             progress_ratio=t.get("progressRatio", "0"),
             progress_text=t.get("progressText"),
-            error=t.get("error") if isinstance(t.get("error"), str) else (t.get("error") or {}).get("errorMessage") if isinstance(t.get("error"), dict) else None,
+            error=_parse_error(t.get("error")),
             artifacts=artifacts,
         )

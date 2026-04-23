@@ -9,7 +9,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Document, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 
-from src.accounts import load_accounts
+from src.accounts import Account, load_accounts
+from src.api.client import make_client
+from src.api.endpoints import check_token
 from src.generator import generate_video
 from src.settings import settings
 from src.xlsx import Row, read_rows
@@ -122,9 +124,27 @@ async def handle_file(message: Message, state: FSMContext, bot: Bot) -> None:
 
 
 
+async def _check_accounts(accounts: list[Account], message) -> list[Account]:
+    valid = []
+    for acc in accounts:
+        async with make_client(acc) as client:
+            ok = await check_token(client, acc.workspace_id)
+        if ok:
+            valid.append(acc)
+        else:
+            logger.warning("[{}] Token invalid (401), skipping", acc.name)
+            await message.answer(f"{acc.name}: 401 Unauthorized")
+    return valid
+
+
 async def _run_generation(job: "GenerationJob") -> None:
     from bot.queue import GenerationJob
     message, accounts, rows, output_dir, duration = job.message, job.accounts, job.rows, job.output_dir, job.duration
+
+    accounts = await _check_accounts(accounts, message)
+    if not accounts:
+        await message.answer("Нет рабочих аккаунтов. Генерация отменена.")
+        return
 
     row_queue: asyncio.Queue[Row] = asyncio.Queue()
     for row in rows:

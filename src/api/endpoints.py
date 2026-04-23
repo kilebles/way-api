@@ -69,6 +69,14 @@ async def submit_task(
     return task
 
 
+async def check_token(client: httpx.AsyncClient, workspace_id: int) -> bool:
+    try:
+        resp = await client.post("/v1/sessions", json={**_team(workspace_id), "taskIds": []})
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 async def get_task(client: httpx.AsyncClient, workspace_id: int, task_id: str) -> Task:
     resp = await client.get(f"/v1/tasks/{task_id}", params=_team(workspace_id))
     resp.raise_for_status()

@@ -1,6 +1,6 @@
 from aiogram import Dispatcher
 
-from bot.handlers import export, generate, start
+from bot.handlers import export, generate, start, status
 
 
 def register_all(dp: Dispatcher) -> None:
@@ -8,4 +8,5 @@ def register_all(dp: Dispatcher) -> None:
         start.router,
         generate.router,
         export.router,
+        status.router,
     )

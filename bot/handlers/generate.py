@@ -104,30 +104,36 @@ async def handle_file(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.answer("Все видео уже сгенерированы.")
         return
 
-    await message.answer(
-        f"Запускаю генерацию: {len(pending)} видео, {duration} сек"
-        + (f" (пропущено {skipped} уже готовых)" if skipped else "")
+    from bot.queue import GenerationJob, enqueue
+    job = GenerationJob(
+        message=message,
+        accounts=accounts,
+        rows=pending,
+        output_dir=output_dir,
+        duration=duration,
+        filename=doc.file_name,
     )
+    position = await enqueue(job)
+    if position > 1:
+        await message.answer(f"{doc.file_name} поставлен в очередь (позиция {position})")
+    else:
+        await message.answer(f"{doc.file_name} начал генерироваться")
 
-    asyncio.create_task(_run_generation(message, accounts, pending, output_dir, duration))
 
 
 
+async def _run_generation(job: "GenerationJob") -> None:
+    from bot.queue import GenerationJob
+    message, accounts, rows, output_dir, duration = job.message, job.accounts, job.rows, job.output_dir, job.duration
 
-async def _run_generation(message: Message, accounts: list, rows: list[Row], output_dir: Path, duration: int) -> None:
-    queue: asyncio.Queue[Row] = asyncio.Queue()
+    row_queue: asyncio.Queue[Row] = asyncio.Queue()
     for row in rows:
-        await queue.put(row)
-
-    done = 0
-    failed = 0
-    total = len(rows)
+        await row_queue.put(row)
 
     async def worker(account, sem: asyncio.Semaphore) -> None:
-        nonlocal done, failed
         while True:
             try:
-                row = queue.get_nowait()
+                row = row_queue.get_nowait()
             except asyncio.QueueEmpty:
                 return
             dest = output_dir / f"{row.number}.mp4"
@@ -143,32 +149,30 @@ async def _run_generation(message: Message, accounts: list, rows: list[Row], out
                         explore_mode=True,
                     )
                 if ok:
-                    done += 1
+                    job.done += 1
                     logger.success("Saved {} → {}", row.number, dest)
                 else:
-                    failed += 1
+                    job.failed += 1
             except Exception as e:
-                failed += 1
+                job.failed += 1
                 logger.error("Failed {} | {}", row.number, e)
             finally:
-                queue.task_done()
+                row_queue.task_done()
 
-    # Один семафор на аккаунт — ограничивает до N одновременных генераций
     async def launch_account(acc, delay: float) -> None:
         await asyncio.sleep(delay)
         sem = asyncio.Semaphore(settings.account_concurrency)
         await asyncio.gather(*[worker(acc, sem) for _ in range(settings.account_concurrency)])
 
-    # Запускаем аккаунты с задержкой чтобы не флудить сабмитами одновременно
     await asyncio.gather(*[
         launch_account(acc, i * 2.0)
         for i, acc in enumerate(accounts)
     ])
 
-    logger.info("Generation complete: done={} failed={} total={}", done, failed, total)
-    await message.answer(f"Готово: {done}/{total}" + (f" | ошибок: {failed}" if failed else ""))
+    logger.info("Generation complete: done={} failed={} total={}", job.done, job.failed, job.total)
+    await message.answer(f"Готово: {job.done}/{job.total}" + (f" | ошибок: {job.failed}" if job.failed else ""))
 
-    if done > 0 and settings.yandex_disk_token:
+    if job.done > 0 and settings.yandex_disk_token:
         category, number = output_dir.parts[-2], output_dir.parts[-1]
         await message.answer(f"Загружаю на Яндекс Диск...")
         try:

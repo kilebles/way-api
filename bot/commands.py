@@ -4,7 +4,8 @@ from loguru import logger
 
 COMMANDS = [
     BotCommand(command="generate", description="Сгенерировать видео"),
-    BotCommand(command="export", description="Экспортировать видео")
+    BotCommand(command="status", description="Статус генерации"),
+    BotCommand(command="export", description="Экспортировать видео"),
 ]
 
 

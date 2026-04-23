@@ -9,6 +9,7 @@ from loguru import logger
 from bot.commands import set_commands
 from bot.config import bot_settings
 from bot.handlers import register_all
+from bot.queue import start_worker
 
 logger.remove()
 logger.add(
@@ -30,6 +31,7 @@ async def main() -> None:
     @dp.startup()
     async def on_startup() -> None:
         await set_commands(bot)
+        start_worker()
         me = await bot.get_me()
         logger.info("Bot started: @{}", me.username)
 

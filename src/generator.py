@@ -73,6 +73,7 @@ async def generate_video(
     resolution: str = "720p",
     generate_audio: bool = True,
     explore_mode: bool = False,
+    duration: int = 15,
 ) -> bool:
     async with make_client(account) as client:
         logger.info("[{}] Starting: '{}'", account.name, prompt)
@@ -80,7 +81,7 @@ async def generate_video(
         options = TaskOptions(
             name=name,
             text_prompt=prompt,
-            duration=settings.video_duration,
+            duration=duration,
             aspect_ratio=aspect_ratio,
             resolution=resolution,
             generate_audio=generate_audio,

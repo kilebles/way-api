@@ -6,7 +6,7 @@ from aiogram import Bot, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Document, Message
+from aiogram.types import CallbackQuery, Document, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 
 from src.accounts import load_accounts
@@ -27,15 +27,35 @@ def _output_path(filename: str) -> Path | None:
     return settings.output_dir / m.group(1) / m.group(2)
 
 
+_DURATION_OPTIONS = [5, 10, 15]
+
+_DURATION_KB = InlineKeyboardMarkup(
+    inline_keyboard=[[
+        InlineKeyboardButton(text=f"{d} сек", callback_data=f"gen:duration:{d}")
+        for d in _DURATION_OPTIONS
+    ]]
+)
+
+
 class GenerateStates(StatesGroup):
+    waiting_duration = State()
     waiting_file = State()
 
 
 @router.message(Command("generate"))
 async def cmd_generate(message: Message, state: FSMContext) -> None:
     logger.info("User {} issued /generate", message.from_user.id)
+    await state.set_state(GenerateStates.waiting_duration)
+    await message.answer("Выберите длительность видео:", reply_markup=_DURATION_KB)
+
+
+@router.callback_query(GenerateStates.waiting_duration, lambda c: c.data and c.data.startswith("gen:duration:"))
+async def cb_duration(call: CallbackQuery, state: FSMContext) -> None:
+    duration = int(call.data.removeprefix("gen:duration:"))
+    await state.update_data(duration=duration)
     await state.set_state(GenerateStates.waiting_file)
-    await message.answer("Отправьте xlsx файл.")
+    await call.answer()
+    await call.message.edit_text(f"Длительность: {duration} сек. Теперь отправьте xlsx файл.")
 
 
 @router.message(GenerateStates.waiting_file)
@@ -69,6 +89,8 @@ async def handle_file(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.answer("Нет доступных аккаунтов.")
         return
 
+    data = await state.get_data()
+    duration: int = data["duration"]
     await state.clear()
 
     # Пропускаем уже сгенерированные
@@ -83,16 +105,16 @@ async def handle_file(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await message.answer(
-        f"Запускаю генерацию: {len(pending)} видео"
+        f"Запускаю генерацию: {len(pending)} видео, {duration} сек"
         + (f" (пропущено {skipped} уже готовых)" if skipped else "")
     )
 
-    asyncio.create_task(_run_generation(message, accounts, pending, output_dir))
+    asyncio.create_task(_run_generation(message, accounts, pending, output_dir, duration))
 
 
 
 
-async def _run_generation(message: Message, accounts: list, rows: list[Row], output_dir: Path) -> None:
+async def _run_generation(message: Message, accounts: list, rows: list[Row], output_dir: Path, duration: int) -> None:
     queue: asyncio.Queue[Row] = asyncio.Queue()
     for row in rows:
         await queue.put(row)
@@ -117,6 +139,7 @@ async def _run_generation(message: Message, accounts: list, rows: list[Row], out
                         prompt=row.prompt,
                         dest=dest,
                         name=row.number,
+                        duration=duration,
                         explore_mode=True,
                     )
                 if ok:

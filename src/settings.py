@@ -17,7 +17,6 @@ class Settings(BaseSettings):
 
     # Generation
     account_concurrency: int = 2
-    video_duration: int = 15  # 5 | 10 | 15
 
     # Yandex Disk
     yandex_disk_token: str = ""

@@ -49,6 +49,7 @@ def _parse_error(error: object) -> str | None:
 
 
 class Artifact(BaseModel):
+    id: str
     url: str
 
 
@@ -66,7 +67,7 @@ class Task(BaseModel):
     @classmethod
     def from_api(cls, data: dict) -> "Task":
         t = data["task"]
-        artifacts = [Artifact(url=a["url"]) for a in t.get("artifacts", []) if "url" in a]
+        artifacts = [Artifact(id=a["id"], url=a["url"]) for a in t.get("artifacts", []) if "url" in a and "id" in a]
         return cls(
             id=t["id"],
             name=t["name"],

@@ -12,7 +12,7 @@ from loguru import logger
 from src.accounts import Account, load_accounts
 from src.api.client import make_client
 from src.api.endpoints import check_token
-from src.generator import generate_video
+from src.generator import generate_video, upscale_video
 from src.settings import settings
 from src.xlsx import Row, read_rows
 from src.yandex_disk import upload_videos
@@ -160,7 +160,7 @@ async def _run_generation(job: "GenerationJob") -> None:
             logger.info("[{}] Generating {} | prompt={!r}", account.name, row.number, row.prompt)
             try:
                 async with sem:
-                    ok = await generate_video(
+                    artifact = await generate_video(
                         account=account,
                         prompt=row.prompt,
                         dest=dest,
@@ -168,7 +168,21 @@ async def _run_generation(job: "GenerationJob") -> None:
                         duration=duration,
                         explore_mode=True,
                     )
-                if ok:
+                if artifact:
+                    if settings.auto_upscale:
+                        upscaled_dest = dest.with_stem(dest.stem + "_upscaled")
+                        try:
+                            async with sem:
+                                ok = await upscale_video(
+                                    account=account,
+                                    artifact_id=artifact.id,
+                                    dest=upscaled_dest,
+                                    name=row.number,
+                                )
+                            if ok:
+                                logger.success("Upscaled {} → {}", row.number, upscaled_dest)
+                        except Exception as e:
+                            logger.error("Upscale failed {} | {}", row.number, e)
                     job.done += 1
                     logger.success("Saved {} → {}", row.number, dest)
                 else:

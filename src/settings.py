@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Generation
     account_concurrency: int = 2
 
+    # Upscale
+    auto_upscale: bool = False
+
     # Yandex Disk
     yandex_disk_token: str = ""
 

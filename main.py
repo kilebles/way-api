@@ -5,6 +5,7 @@ from loguru import logger
 
 from src.accounts import load_accounts
 from src.generator import generate_video
+from src.settings import settings
 
 logger.remove()
 logger.add(
@@ -27,6 +28,7 @@ async def main() -> None:
         generate_video(
             account=account,
             prompt="monke monk",
+            dest=settings.output_dir / f"{account.name}.mp4",
             name="test generation",
             duration=15,
             explore_mode=True,
@@ -40,7 +42,7 @@ async def main() -> None:
         if isinstance(result, Exception):
             logger.error("[{}] Failed: {}", account.name, result)
         else:
-            logger.success("[{}] {} file(s) saved", account.name, len(result))
+            logger.success("[{}] saved → {}", account.name, result)
 
 
 if __name__ == "__main__":

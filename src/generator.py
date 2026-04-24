@@ -8,7 +8,7 @@ from loguru import logger
 from src.accounts import Account
 from src.api.client import make_client
 from src.api.endpoints import get_task, submit_task
-from src.models import Task, TaskOptions, TaskStatus
+from src.models import Artifact, Task, TaskOptions, TaskStatus
 from src.settings import settings
 
 
@@ -63,6 +63,41 @@ async def _download_artifact(client: httpx.AsyncClient, url: str, dest: Path) ->
     logger.success("Saved: {}", dest)
 
 
+async def upscale_video(
+    account: Account,
+    artifact_id: str,
+    dest: Path,
+    name: str = "upscale",
+    explore_mode: bool = True,
+) -> bool:
+    async with make_client(account) as client:
+        logger.info("[{}] Upscaling: '{}'", account.name, name)
+
+        options = {
+            "name": f"Upscale - {name}",
+            "task_artifact_id": artifact_id,
+            "exploreMode": explore_mode,
+        }
+
+        task = await submit_task(
+            client=client,
+            workspace_id=account.workspace_id,
+            task_type="media_upscale",
+            options=options,
+            account_name=account.name,
+        )
+
+        task = await _poll_until_done(client, account.workspace_id, task.id, account.name)
+
+        if not task.artifacts:
+            return False
+
+        artifact = task.artifacts[0]
+        await _download_artifact(client, artifact.url, dest)
+        logger.info("[{}] Upscale done → {}", account.name, dest)
+        return True
+
+
 async def generate_video(
     account: Account,
     prompt: str,
@@ -74,7 +109,7 @@ async def generate_video(
     generate_audio: bool = True,
     explore_mode: bool = False,
     duration: int = 15,
-) -> bool:
+) -> Artifact | None:
     async with make_client(account) as client:
         logger.info("[{}] Starting: '{}'", account.name, prompt)
 
@@ -100,9 +135,9 @@ async def generate_video(
         task = await _poll_until_done(client, account.workspace_id, task.id, account.name)
 
         if not task.artifacts:
-            return False
+            return None
 
         artifact = task.artifacts[0]
         await _download_artifact(client, artifact.url, dest)
         logger.info("[{}] Done → {}", account.name, dest)
-        return True
+        return artifact

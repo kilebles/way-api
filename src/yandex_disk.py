@@ -9,23 +9,21 @@ YANDEX_API = "https://cloud-api.yandex.net/v1/disk/resources"
 BASE_PATH = "disk:/YT History Doc"
 
 CATEGORY_MAPPING = {
-    "survival": "005. Выживание v3",
-    "vikings": "020 Викинги",
-    "rome": "010. Сердце Рима",
-    "zapad": "014. Дикий Запад",
-    "victorian": "016. Викторианская",
-    "ww2": "017 Вторая Мировая",
-    "indians": "018 Индейцы",
-    "battle": "019 Битвы",
-    "battles": "019 Битвы",
-    "advent": "022 Приключения",
-    "oldmoney": "023 Old Money",
+    "survival": "005 Survival v4",
+    "rome": "010 Rome v2",
+    "zapad": "014 Zapad v2",
+    "victorian": "016 Victorian v2",
+    "indians": "018 Indians v2",
+    "vikings": "020 Vikings v2",
+    "advent": "022 Advent",
     "construct": "025 Строительство",
     "construction": "025 Строительство",
     "conquest": "026 Conquest",
     "cosmos": "027 Cosmos Anomaly",
     "space_travel": "028 Space Travel",
-    "ufo_img": "030 УФО",
+    "ufo": "030 UFO",
+    "ufo_img": "030 UFO",
+    "entire": "032 Entire",
 }
 
 BATCH_SIZE = 50

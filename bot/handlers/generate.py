@@ -19,7 +19,7 @@ from src.yandex_disk import upload_videos
 
 router = Router(name="generate")
 
-_NAME_RE = re.compile(r"^([a-zA-Z]+)_(\d+)")
+_NAME_RE = re.compile(r"^(?:seedance_)?([a-zA-Z]+)_(\d+)")
 
 
 def _output_path(filename: str) -> Path | None:
